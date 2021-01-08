@@ -1,10 +1,9 @@
-.idea/deployment.xml
-.idea/fw.iml
-.idea/misc.xml
-.idea/modules.xml
-.idea/php.xml
-.idea/vcs.xml
-.idea/workspace.xml
-.remote-sync.json
-.idea/dictionaries/y_fukumoto.xml
-.idea/
+# Confidential settings file
+.htaccess
+
+# logfile
+logs/*
+
+# IDE config file
+./workspace.code-workspace
+./.idea/
