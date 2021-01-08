@@ -215,7 +215,9 @@ class Uri implements UriInterface
         }
 
         if ($basePath) {
-            $virtualPath = ltrim(substr($requestUri, strlen($basePath)), '/');
+			//URI先頭の/は削除しないよう修正
+//          $virtualPath = ltrim(substr($requestUri, strlen($basePath)), '/');
+            $virtualPath = substr($requestUri, strlen($basePath));
         }
 
         // Query string
