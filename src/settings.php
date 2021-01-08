@@ -2,8 +2,11 @@
 
 return [
     'settings' => [
-        'displayErrorDetails' => true, // set to false in production
+        'displayErrorDetails' => false, // set to false in production
         'addContentLengthHeader' => false, // Allow the web server to send the content-length header
+
+        //ミドルウェアの前にマッピングを確定させる
+        'determineRouteBeforeAppMiddleware' => true,
 
         // Renderer settings
         'renderer' => [
@@ -31,12 +34,12 @@ return [
 
             'connection' => [
                 'driver' => 'pdo_mysql',
-                'host' => '192.168.0.19',
+                'host' => getenv("DB_HOST"),
                 'port' => '3306',
-                'user' => 'team-a',
-                'password' => 'team-a!',
-                'dbname' => 'team-a',
-                'charset' => 'utf8'
+                'user' => getenv("DB_USER"),
+                'password' => getenv("DB_PASS"),
+                'dbname' => getenv("DB_NAME"),
+                'charset' => 'utf8mb4'
             ]
         ]
     ],

@@ -14,225 +14,203 @@ use Doctrine\DBAL\Query\QueryBuilder;
  * 2.src/dependencies.phpにDB接続用のコンテナを$container['db']を作成
  * をしておきます。
  *
- * @copyright Ceres inc.
- * @author y-fukumoto <y-fukumoto@ceres-inc.jp>
- * @since 2018/08/29
  */
-abstract class Dao
-{
+abstract class Dao {
+	/**
+	 * @var \Doctrine\DBAL\Connection $db DB接続用コンテナを格納
+	 */
+	protected $db;
 
-    /**
-     * @var \Doctrine\DBAL\Connection $db DB接続用コンテナを格納
-     */
+	/**
+	 * @var string _table_name 子クラスのテーブル名を格納します
+	 */
+	protected $_table_name;
 
-    protected $db;
+	/**
+	 * Dao constructor.
+	 *
+	 * Dao のコンストラクタです。コネクションを格納し、子クラスのクラス名からテーブル名を指定します
+	 *
+	 * @param \Doctrine\DBAL\Connection $db データベース
+	 */
 
-    /**
-     * @var string _table_name 子クラスのテーブル名を格納します
-     */
+	public function __construct($db)
+	{
+		//DBコネクションを格納
+		$this->db = $db;
 
-    protected $_table_name;
+		//子クラスのファイル名を取得する
+		$ref = get_class($this);
 
-    /**
-     * Dao constructor.
-     *
-     * Dao のコンストラクタです。コネクションを格納し、子クラスのクラス名からテーブル名を指定します
-     *
-     * @copyright Ceres inc.
-     * @author y-fukumoto <y-fukumoto@ceres-inc.jp>
-     * @since 2018/08/28
-     * @param \Doctrine\DBAL\Connection $db データベース
-     */
+		// MODEL\DAO\CLASS から CLASS名のみを取得する
+		$this->_table_name = str_replace(__NAMESPACE__ . "\\", "", $ref);
 
-    public function __construct($db)
-    {
-        //DBコネクションを格納
-        $this->db = $db;
+		//キャメルケースをスネークケースに変換
+		$this->_table_name = preg_replace("/([A-Z])/", '_${1}', $this->_table_name);
+		$this->_table_name = strtolower(preg_replace("/^_/", '', $this->_table_name));
+	}
 
-        //子クラスのファイル名を取得する
-        $ref = get_class($this);
+	/**
+	 * select Function
+	 *
+	 * 情報を取得する汎用SELECT関数
+	 *
+	 * @param array $param WHERE句として指定したい条件を連想配列で指定します。値に%があると、部分一致などもできます
+	 * @param string $sort ソートしたいカラム名を指定します
+	 * @param string $order 昇順=ASC 降順=DESCを指定します
+	 * @param int $limit 取得件数を指定します。デフォルト10件
+	 * @param bool $fetch_all false=一件のみ取得します true=全件取得します
+	 * @return array|mixed 取得した情報を配列で返送します
+	 */
+	public function select(array $param, $sort = "", $order = "ASC", $limit = 10, $fetch_all = false)
+	{
+		//クエリビルダをインスタンス化
+		$queryBuilder = new QueryBuilder($this->db);
 
-        // MODEL\DAO\CLASS から CLASS名のみを取得する
-        $this->_table_name = str_replace(__NAMESPACE__ . "\\", "", $ref);
+		//ベースクエリを構築する
+		$queryBuilder
+			->select('*')
+			->from($this->_table_name);
 
-        //キャメルケースをスネークケースに変換
-        $this->_table_name = preg_replace("/([A-Z])/", '_${1}', $this->_table_name);
-        $this->_table_name = strtolower(preg_replace("/^_/", '', $this->_table_name));
+		//引数の配列からWhere句を生成
+		foreach ($param as $key => $val) {
+			//値があれば処理をする
+			if ($val) {
+				$queryBuilder->andWhere($key . " LIKE :$key");
+				$queryBuilder->setParameter(":$key", $val);
+			}
+		}
 
-    }
+		//ソート順が指定されていたら指定します
+		if ($sort) {
+			$queryBuilder->orderBy($sort, $order);
+		}
 
-    /**
-     * select Function
-     *
-     * 情報を取得する汎用SELECT関数です
-     *
-     * @copyright Ceres inc.
-     * @author y-fukumoto <y-fukumoto@ceres-inc.jp>
-     * @since 2018/08/28
-     * @param array $param WHERE句として指定したい条件を連想配列で指定します。値に%があると、部分一致などもできます
-     * @param string $sort ソートしたいカラム名を指定します
-     * @param string $order 昇順=ASC 降順=DESCを指定します
-     * @param int $limit 取得件数を指定します。デフォルト10件
-     * @param bool $fetch_all false=一件のみ取得します true=全件取得します
-     * @return array|mixed 取得した情報を配列で返送します
-     */
-    public function select(array $param, $sort = "", $order = "ASC", $limit = 10, $fetch_all = false)
-    {
-        //クエリビルダをインスタンス化
-        $queryBuilder = new QueryBuilder($this->db);
+		//リミットが指定されていたら指定します
+		if ($limit) {
+			$queryBuilder->setMaxResults($limit);
+		}
 
-        //ベースクエリを構築する
-        $queryBuilder
-            ->select('*')
-            ->from($this->_table_name);
+		//クエリ実行
+		$query = $queryBuilder->execute();
 
-        //引数の配列からWhere句を生成
-        foreach ($param as $key => $val) {
-            //値があれば処理をする
-            if ($val) {
-                $queryBuilder->andWhere($key . " LIKE :$key");
-                $queryBuilder->setParameter(":$key", $val);
-            }
-        }
+		//レコードの取得方法。全件モードのとき
+		if ($fetch_all) {
+			//その結果を取得する実行
+			$result = $query->FetchALL();
+		} else {
+			//レコードの取得方法。1件モードのとき
+			$result = $query->Fetch();
+		}
 
-        //ソート順が指定されていたら指定します
-        if ($sort) {
-            $queryBuilder->orderBy($sort, $order);
-        }
+		//結果を返送
+		return $result;
+	}
 
-        //リミットが指定されていたら指定します
-        if ($limit) {
-            $queryBuilder->setMaxResults($limit);
-        }
+	/**
+	 * insert Function
+	 *
+	 * 汎用INSERT関数
+	 *
+	 * 連想配列で指定した情報を新規レコードとして挿入します
+	 *
+	 * @param array $param 挿入したいデータを連想配列で指定します
+	 * @return int|bool 発番されればidを返送、失敗したらfalseを返送します
+	 */
+	public function insert(array $param)
+	{
 
-        //クエリ実行
-        $query = $queryBuilder->execute();
+		//クエリビルダをインスタンス化
+		$queryBuilder = new QueryBuilder($this->db);
 
-        //レコードの取得方法。全件モードのとき
-        if ($fetch_all) {
-            //その結果を取得する実行
-            $result = $query->FetchALL();
-        } else {
-            //レコードの取得方法。1件モードのとき
-            $result = $query->Fetch();
-        }
+		//ベースクエリを構築する
+		$queryBuilder
+			->insert($this->_table_name);
 
-        //結果を返送
-        return $result;
-    }
+		//引数の配列からWhere句を生成
+		foreach ($param as $key => $val) {
+			//値があれば処理をする
+			if ($val) {
+				$queryBuilder->setValue($key, ":$key");
+				$queryBuilder->setParameter(":$key", $val);
+			}
+		}
 
-    /**
-     * insert Function
-     *
-     * 汎用INSERT関数です
-     *
-     * 連想配列で指定した情報を新規レコードとして挿入します
-     *
-     * @copyright Ceres inc.
-     * @author y-fukumoto <y-fukumoto@ceres-inc.jp>
-     * @since 2018/08/28
-     * @param array $param 挿入したいデータを連想配列で指定します
-     * @return int|bool 発番されればidを返送、失敗したらfalseを返送します
-     */
-    public function insert(array $param)
-    {
+		//クエリ実行
+		$queryBuilder->execute();
 
-        //クエリビルダをインスタンス化
-        $queryBuilder = new QueryBuilder($this->db);
+		//最終発行IDを返送
+		$lastInsertId = $queryBuilder->getConnection()->lastInsertId();
 
-        //ベースクエリを構築する
-        $queryBuilder
-            ->insert($this->_table_name);
+		//結果を返送
+		return $lastInsertId;
+	}
 
-        //引数の配列からWhere句を生成
-        foreach ($param as $key => $val) {
-            //値があれば処理をする
-            if ($val) {
-                $queryBuilder->setValue($key, ":$key");
-                $queryBuilder->setParameter(":$key", $val);
-            }
-        }
+	/**
+	 * update Function
+	 *
+	 * 情報の更新を行う関数
+	 *
+	 * @param array $param 更新したい情報をid込みでセットします
+	 * @param array $primaryKeys 更新する行を特定するために使うカラムの名前を指定します。ここで指定したカラムは$paramに含まれている必要があります。
+	 */
 
-        //クエリ実行
-        $queryBuilder->execute();
+	public function update(array $param,array $primaryKeys=array("id"))
+	{
 
-        //最終発行IDを返送
-        $lastInsertId = $queryBuilder->getConnection()->lastInsertId();
+		//クエリビルダをインスタンス化
+		$queryBuilder = new QueryBuilder($this->db,true);
 
-        //結果を返送
-        return $lastInsertId;
-    }
+		//ベースクエリを構築する
+		$queryBuilder
+			->update($this->_table_name);
 
-    /**
-     * update Function
-     *
-     * 情報の更新を行う関数です
-     *
-     * idというカラムは予約語で、各テーブルの主キーとなります。
-     *
-     * @copyright Ceres inc.
-     * @author y-fukumoto <y-fukumoto@ceres-inc.jp>
-     * @since 2018/08/29
-     * @param array $param 更新したい情報をid込みでセットします
-     */
+		//引数の配列からWhere句を生成
+		foreach ($param as $key => $val) {
 
-    public function update(array $param)
-    {
+			//id以外の場合
+			if (!in_array($key,$primaryKeys)) {
+				$queryBuilder->set($key, ":$key");
+				$queryBuilder->setParameter(":$key", $val);
+			} else {
+				$queryBuilder->where($key."=:$key");
+				$queryBuilder->setParameter(":$key", $val);
+			}
+		}
 
-        //クエリビルダをインスタンス化
-        $queryBuilder = new QueryBuilder($this->db);
+		//クエリ実行
+		return $queryBuilder->execute();
+	}
 
-        //ベースクエリを構築する
-        $queryBuilder
-            ->update($this->_table_name);
+	/**
+	 * delete Function
+	 *
+	 * 情報の削除を行う関数
+	 *
+	 * idのレコードを削除します
+	 *
+	 * @param array $param WHERE句として指定したい条件を連想配列で指定します。値に%があると、部分一致などもできます
+	 */
+	public function delete(array $param){
+		//クエリビルダをインスタンス化
+		$queryBuilder = new QueryBuilder($this->db);
 
-        //引数の配列からWhere句を生成
-        foreach ($param as $key => $val) {
+		//ベースクエリを構築する
+		$queryBuilder
+			->delete($this->_table_name);
 
-            //id以外の場合
-            if ($key != "id") {
-                $queryBuilder->set($key, ":$key");
-                $queryBuilder->setParameter(":$key", $val);
-            } else {
-                //idというカラム名の場合は、更新するIDを指定します
-                $queryBuilder->where($key . "=$val");
-            }
-        }
+		//引数の配列からWhere句を生成
+		foreach ($param as $key => $val) {
+			if($val){
+				$queryBuilder->andWhere($key."= :$key")
+				->setParameter(":$key", $val);
+			}
+		}
+		//クエリ実行
+		$queryBuilder->execute();
+	}
 
-        //クエリ実行
-        $queryBuilder->execute();
-
-    }
-
-    /**
-     * delete Function
-     *
-     * 情報の削除を行う関数です
-     *
-     * idのレコードを削除します
-     *
-     * @copyright Ceres inc.
-     * @author y-fukumoto <y-fukumoto@ceres-inc.jp>
-     * @since 2018/08/29
-     * @param int $id 削除したいidをセットします
-     */
-
-    public function delete(int $id)
-    {
-        //クエリビルダをインスタンス化
-        $queryBuilder = new QueryBuilder($this->db);
-
-        //ベースクエリを構築する
-        $queryBuilder
-            ->delete($this->_table_name);
-
-        //指定されたidをセット
-        $queryBuilder->andWhere("id = :id");
-        $queryBuilder->setParameter(':id', $id);
-
-        //クエリ実行
-        $queryBuilder->execute();
-
-    }
-
+	public function getQueryBuilder(){
+		return new QueryBuilder($this->db);
+	}
 }
