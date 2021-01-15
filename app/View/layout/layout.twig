@@ -1,4 +1,5 @@
 {% set site_name = "Anonymous" %}
+{% set site_author = "Anonymous" %}
 <!DOCTYPE html>
 <html lang="ja" class="h-100">
 <head prefix="og: http://ogp.me/ns#">
@@ -21,6 +22,7 @@
 	{% set page_keywords = page_keywords|merge(["Anonymous", "template", "keywoard"]) %}
 	<meta name="keywords" content = "{{ page_keywords|join(",") }}">
 	<meta property="og:type" content = "{{ page_type }}">
+	<meta name="author" content="{{ site_author }}">
 	<meta property="og:title" content = "{{ page_title }} - {{ site_name }}">
 	<title>{{ page_title }} - {{ site_name }}</title>
 	{% block header_scripts_add %}{% endblock %}
